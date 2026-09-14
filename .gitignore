@@ -1,0 +1,22 @@
+# Java / Maven
+target/
+*.class
+*.jar
+!.mvn/wrapper/maven-wrapper.jar
+
+# IDE / OS
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Entorno local (no versionar secretos reales)
+.env
+*.local
