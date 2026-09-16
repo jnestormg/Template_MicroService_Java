@@ -99,6 +99,11 @@ docker compose up -d postgres kafka
 ./mvnw spring-boot:run
 ```
 
+> **Recarga automática:** `spring-boot-devtools` viene activado (dependencia `runtime`/`optional`).
+> Con `./mvnw spring-boot:run` la app se reinicia sola al modificar código, y el Swagger
+> (`/swagger-ui.html`) refleja los cambios al instante. En el contenedor Docker no aplica:
+> ahí es necesario reconstruir (`docker compose up -d --build backend`).
+
 ## Configuración (.env)
 
 Variable | Descripción | Default
@@ -118,21 +123,26 @@ El orden de precedencia es: variables reales del entorno (Docker/OS) > `.env` > 
 
 ## Endpoints
 
-Autenticación (`/auth`, pública excepto `logout`):
+Autenticación (`/auth`):
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| POST | `/auth/register` | Registro (rol USER por defecto) |
-| POST | `/auth/login` | Login → access + refresh tokens |
-| POST | `/auth/refresh` | Rota tokens con el refresh token |
+| POST | `/auth/login` | Login → access + refresh tokens (público) |
+| POST | `/auth/refresh` | Rota tokens con el refresh token (público) |
 | POST | `/auth/logout` | Revoca el refresh token (autenticado) |
+
+> No existe registro público. Los usuarios se crean con `POST /api/users` (requiere `USER:CREATE`), asignando el rol directamente. El borrado es lógico (`enabled=false`): el usuario no puede iniciar sesión ni renovar tokens, pero se conserva en la lista.
 
 Usuarios (`/api/users`):
 
 | Método | Ruta | Permiso | Descripción |
 |---|---|---|---|
 | GET | `/api/users/me` | autenticado | Perfil actual |
-| GET | `/api/users` | `USER:READ` | Lista paginada de usuarios |
+| GET | `/api/users` | `USER:READ` | Lista paginada de usuarios (incluye deshabilitados) |
+| POST | `/api/users` | `USER:CREATE` | Crear usuario con roles (si roles se omite, asigna `USER`) |
+| PUT | `/api/users/{id}/roles` | `USER:UPDATE` | Reemplaza los roles de un usuario existente |
+| PUT | `/api/users/{id}` | `USER:UPDATE` | Actualiza username/email/password/enabled (solo los campos enviados) |
+| DELETE | `/api/users/{id}` | `USER:UPDATE` | Borrado lógico: deshabilita la cuenta |
 
 Productos (`/api/products`, CRUD de ejemplo):
 
@@ -168,6 +178,8 @@ curl http://localhost:8090/api/products -H "Authorization: Bearer $TOKEN"
 
 | Permiso | Rol ADMIN | Rol USER |
 |---|---|---|
+| `USER:CREATE` | ✅ | ❌ |
+| `USER:UPDATE` | ✅ | ❌ |
 | `PRODUCT:CREATE` | ✅ | ✅ |
 | `PRODUCT:READ` | ✅ | ✅ |
 | `PRODUCT:UPDATE` | ✅ | ✅ |

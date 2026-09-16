@@ -31,7 +31,6 @@ public class SecurityConfig {
     private final ObjectMapper objectMapper;
 
     private static final String[] WHITELIST = {
-            "/auth/register",
             "/auth/login",
             "/auth/refresh",
             "/v3/api-docs/**",

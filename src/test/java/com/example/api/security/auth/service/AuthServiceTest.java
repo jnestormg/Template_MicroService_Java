@@ -5,7 +5,6 @@ import com.example.api.security.auth.dto.AuthResponse;
 import com.example.api.security.auth.dto.LoginRequest;
 import com.example.api.security.auth.dto.LogoutRequest;
 import com.example.api.security.auth.dto.RefreshRequest;
-import com.example.api.security.auth.dto.RegisterRequest;
 import com.example.api.security.auth.model.RefreshToken;
 import com.example.api.security.auth.repository.RefreshTokenRepository;
 import com.example.api.security.config.JwtProperties;
@@ -20,7 +19,6 @@ import com.example.api.user.mapper.UserMapper;
 import com.example.api.user.model.Permission;
 import com.example.api.user.model.Role;
 import com.example.api.user.model.User;
-import com.example.api.user.repository.RoleRepository;
 import com.example.api.user.repository.UserRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,8 +45,6 @@ class AuthServiceTest {
 
     @Mock
     private UserRepository userRepository;
-    @Mock
-    private RoleRepository roleRepository;
     @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
@@ -88,43 +84,6 @@ class AuthServiceTest {
                 .thenReturn(new TokenPair("access-token", "refresh-token"));
         when(jwtProperties.getRefreshTokenExpirationMs()).thenReturn(604_800_000L);
         when(userMapper.toResponse(user)).thenReturn(buildResponse(user));
-    }
-
-    @Test
-    void register_createsUserWithDefaultRoleAndIssuesTokens() {
-        RegisterRequest request = new RegisterRequest("admin", "admin@api.local", "password123");
-        User user = buildUser();
-
-        when(userRepository.existsByUsername("admin")).thenReturn(false);
-        when(userRepository.existsByEmail("admin@api.local")).thenReturn(false);
-        when(roleRepository.findByName("USER"))
-                .thenReturn(Optional.of(Role.builder().name("USER").permissions(Set.of()).build()));
-        when(passwordEncoder.encode("password123")).thenReturn("hashed-password");
-        when(userRepository.save(any(User.class))).thenReturn(user);
-
-        UserResponse response = buildResponse(user);
-        when(jwtService.generateTokenPair(any(AppUserDetails.class)))
-                .thenReturn(new TokenPair("access-token", "refresh-token"));
-        when(jwtProperties.getRefreshTokenExpirationMs()).thenReturn(604_800_000L);
-        when(userMapper.toResponse(any(User.class))).thenReturn(response);
-
-        AuthResponse result = authService.register(request);
-
-        assertThat(result.accessToken()).isEqualTo("access-token");
-        assertThat(result.refreshToken()).isEqualTo("refresh-token");
-        assertThat(result.tokenType()).isEqualTo("Bearer");
-        assertThat(result.user().username()).isEqualTo("admin");
-        verify(refreshTokenRepository).save(any(RefreshToken.class));
-    }
-
-    @Test
-    void register_rejectsExistingUsername() {
-        RegisterRequest request = new RegisterRequest("admin", "admin@api.local", "password123");
-        when(userRepository.existsByUsername("admin")).thenReturn(true);
-
-        assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus().value()).isEqualTo(409));
     }
 
     @Test
@@ -190,6 +149,27 @@ class AuthServiceTest {
                 .tokenHash("ajduwu")
                 .expiresAt(Instant.now().plusSeconds(3600))
                 .revoked(true)
+                .build();
+
+        when(jwtService.parse("refresh-token", TokenType.REFRESH))
+                .thenReturn(new JwtClaims("admin", 1L, TokenType.REFRESH, List.of(), "jti"));
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(stored));
+
+        assertThatThrownBy(() -> authService.refresh(new RefreshRequest("refresh-token")))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> assertThat(((BusinessException) ex).getStatus().value()).isEqualTo(401));
+    }
+
+    @Test
+    void refresh_rejectsDisabledUser() {
+        User user = buildUser();
+        user.setEnabled(false);
+        RefreshToken stored = RefreshToken.builder()
+                .id(1L)
+                .user(user)
+                .tokenHash("ajduwu")
+                .expiresAt(Instant.now().plusSeconds(3600))
+                .revoked(false)
                 .build();
 
         when(jwtService.parse("refresh-token", TokenType.REFRESH))

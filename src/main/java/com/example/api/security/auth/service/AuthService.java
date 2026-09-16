@@ -5,7 +5,6 @@ import com.example.api.security.auth.dto.AuthResponse;
 import com.example.api.security.auth.dto.LoginRequest;
 import com.example.api.security.auth.dto.LogoutRequest;
 import com.example.api.security.auth.dto.RefreshRequest;
-import com.example.api.security.auth.dto.RegisterRequest;
 import com.example.api.security.auth.model.RefreshToken;
 import com.example.api.security.auth.repository.RefreshTokenRepository;
 import com.example.api.security.config.JwtProperties;
@@ -17,9 +16,7 @@ import com.example.api.security.token.TokenPair;
 import com.example.api.security.token.TokenType;
 import com.example.api.user.dto.UserResponse;
 import com.example.api.user.mapper.UserMapper;
-import com.example.api.user.model.Role;
 import com.example.api.user.model.User;
-import com.example.api.user.repository.RoleRepository;
 import com.example.api.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -37,40 +34,13 @@ import java.util.HexFormat;
 @RequiredArgsConstructor
 public class AuthService {
 
-    private static final String DEFAULT_ROLE = "USER";
-
     private final UserRepository userRepository;
-    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final JwtProperties jwtProperties;
     private final RefreshTokenRepository refreshTokenRepository;
     private final UserMapper userMapper;
     private final CurrentUserService currentUserService;
-
-    @Transactional
-    public AuthResponse register(RegisterRequest request) {
-        if (userRepository.existsByUsername(request.username())) {
-            throw BusinessException.conflict("USERNAME_TAKEN", "El nombre de usuario ya esta en uso");
-        }
-        if (userRepository.existsByEmail(request.email())) {
-            throw BusinessException.conflict("EMAIL_TAKEN", "El email ya esta registrado");
-        }
-
-        Role userRole = roleRepository.findByName(DEFAULT_ROLE)
-                .orElseThrow(() -> BusinessException.notFound("ROLE_NOT_FOUND", "Rol por defecto no configurado"));
-
-        User user = User.builder()
-                .username(request.username())
-                .email(request.email())
-                .password(passwordEncoder.encode(request.password()))
-                .enabled(true)
-                .build();
-        user.getRoles().add(userRole);
-        userRepository.save(user);
-
-        return issueTokens(user);
-    }
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
@@ -104,6 +74,9 @@ public class AuthService {
         }
         if (!stored.getUser().getUsername().equals(claims.subject())) {
             throw BusinessException.unauthorized("REFRESH_MISMATCH", "Refresh token no coincide con el usuario");
+        }
+        if (!stored.getUser().isEnabled()) {
+            throw BusinessException.unauthorized("USER_DISABLED", "El usuario esta deshabilitado");
         }
 
         stored.setRevoked(true);

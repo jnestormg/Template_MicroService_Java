@@ -65,7 +65,7 @@ app:
     refresh-token-expiration-ms: 604800000
     issuer: api
   cors:
-    allowed-origins: http://localhost:3000,http://localhost:4200,http://localhost:8080
+    allowed-origins: http://localhost:3000,http://localhost:4200,http://localhost:8080,http://localhost:34537
   kafka:
     product-topic: product-events
 
